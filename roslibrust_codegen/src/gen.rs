@@ -9,6 +9,20 @@ use crate::utils::RosVersion;
 use crate::{bail, ArrayType, Error};
 use crate::{ConstantInfo, FieldInfo, MessageFile, RosLiteral, ServiceFile};
 
+/// Check if a string is a Rust keyword that would require a raw identifier
+fn is_rust_keyword(name: &str) -> bool {
+    matches!(
+        name,
+        "as" | "async" | "await" | "break" | "const" | "continue" | "crate" | "dyn" |
+        "else" | "enum" | "extern" | "false" | "fn" | "for" | "if" | "impl" | "in" |
+        "let" | "loop" | "match" | "mod" | "move" | "mut" | "pub" | "ref" | "return" |
+        "self" | "Self" | "static" | "struct" | "super" | "trait" | "true" | "type" |
+        "union" | "unsafe" | "use" | "where" | "while" | "abstract" | "become" | "box" |
+        "do" | "final" | "macro" | "override" | "priv" | "try" | "typeof" | "unsized" |
+        "virtual" | "yield"
+    )
+}
+
 fn derive_attrs() -> Vec<syn::Attribute> {
     vec![
         parse_quote! { #[derive(::roslibrust::codegen::Deserialize)] },
@@ -160,7 +174,12 @@ fn generate_field_definition(
         "Somehow we generate a rust type that isn't valid rust syntax. This should not happen!",
     );
 
-    let field_name = format_ident!("r#{}", field.field_name);
+    // Only use raw identifier if field name is a Rust keyword
+    let field_name = if is_rust_keyword(&field.field_name) {
+        format_ident!("r#{}", field.field_name)
+    } else {
+        format_ident!("{}", field.field_name)
+    };
     let property_line = quote! { pub #field_name: #rust_field_type, };
     let default_line = if let Some(ref default_val) = field.default {
         let default_val = ros_literal_to_rust_literal(
@@ -230,7 +249,12 @@ fn generate_constant_field_definition(
     constant: ConstantInfo,
     version: RosVersion,
 ) -> Result<TokenStream, Error> {
-    let constant_name = format_ident!("r#{}", constant.constant_name);
+    // Only use raw identifier if constant name is a Rust keyword
+    let constant_name = if is_rust_keyword(&constant.constant_name) {
+        format_ident!("r#{}", constant.constant_name)
+    } else {
+        format_ident!("{}", constant.constant_name)
+    };
     let constant_rust_type = convert_ros_type_to_rust_type(version, &constant.constant_type)
         .ok_or(Error::new(format!(
             "A constant was detected {constant:?} for which no valid rust type was found."
